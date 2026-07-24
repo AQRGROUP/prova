@@ -31,6 +31,9 @@ class Lavoratore(Base):
 
     documento_tipo: Mapped[str | None] = mapped_column(String(50), nullable=True)
     documento_raw_extraction: Mapped[str | None] = mapped_column(String, nullable=True)
+    # SHA-256 della foto ricevuta: permette di rilevare quando la stessa identica
+    # immagine viene reinviata per un lavoratore diverso (riuso, per errore o furbizia).
+    documento_foto_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     creato_il: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

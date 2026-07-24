@@ -9,6 +9,7 @@ Flusso:
                         "nuova azienda".
 """
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -78,6 +79,8 @@ def _reset_a_nuova_azienda(sessione: SessioneConversazione) -> RispostaConversaz
 
 
 def _crea_lavoratore(db: Session, azienda: Azienda, dati: dict, mansione: str) -> Lavoratore:
+    dati = dict(dati)
+    foto_hash = dati.pop("_documento_foto_hash", None)
     lavoratore = Lavoratore(
         azienda_id=azienda.id,
         nome=dati.get("nome") or "",
@@ -93,25 +96,51 @@ def _crea_lavoratore(db: Session, azienda: Azienda, dati: dict, mansione: str) -
         area=azienda.regione,
         documento_tipo=dati.get("tipo_documento"),
         documento_raw_extraction=json.dumps(dati, ensure_ascii=False),
+        documento_foto_hash=foto_hash,
     )
     db.add(lavoratore)
     db.flush()
     return lavoratore
 
 
-def _messaggio_conferma_lavoratore(lavoratore: Lavoratore) -> str:
+def _foto_gia_usata_per(db: Session, lavoratore: Lavoratore) -> Lavoratore | None:
+    """Ritorna un altro lavoratore già registrato con la stessa identica foto documento, se esiste."""
+    if not lavoratore.documento_foto_hash:
+        return None
+    return (
+        db.query(Lavoratore)
+        .filter(
+            Lavoratore.documento_foto_hash == lavoratore.documento_foto_hash,
+            Lavoratore.id != lavoratore.id,
+        )
+        .first()
+    )
+
+
+def _messaggio_conferma_lavoratore(db: Session, lavoratore: Lavoratore) -> str:
     intestazione = f"Registrato {lavoratore.nome} {lavoratore.cognome} ({lavoratore.mansione})."
+
+    duplicato = _foto_gia_usata_per(db, lavoratore)
+    avviso_duplicato = ""
+    if duplicato:
+        avviso_duplicato = (
+            f" ⚠️ ATTENZIONE: questa foto è identica a quella già usata per "
+            f"{duplicato.nome} {duplicato.cognome} ({duplicato.azienda.ragione_sociale}). "
+            "Se non è un errore, controlla il documento a mano."
+        )
+
     corsi, da_verificare = corsi_per_mansione_elastico(lavoratore.mansione)
 
     if corsi and not da_verificare:
         elenco = ", ".join(c.nome for c in corsi)
-        return f"{intestazione} Corsi richiesti: {elenco}."
+        return f"{intestazione} Corsi richiesti: {elenco}.{avviso_duplicato}"
     if corsi and da_verificare:
         elenco = ", ".join(c.nome for c in corsi)
         return (
             f"{intestazione} Mansione non tra le regole note: corsi SUGGERITI (da verificare a mano): {elenco}."
+            f"{avviso_duplicato}"
         )
-    return f"{intestazione} Nessun corso trovato per questa mansione: va verificata e assegnata a mano."
+    return f"{intestazione} Nessun corso trovato per questa mansione: va verificata e assegnata a mano.{avviso_duplicato}"
 
 
 def _gestisci_attesa_azienda(db: Session, sessione: SessioneConversazione, messaggio: MessaggioInbound) -> RispostaConversazione:
@@ -193,7 +222,7 @@ def _gestisci_attesa_lavoratori(db: Session, sessione: SessioneConversazione, me
             dati = json.loads(sessione.lavoratore_dato_pendente)
             lavoratore = _crea_lavoratore(db, azienda, dati, messaggio.testo or "")
             sessione.lavoratore_dato_pendente = None
-            return RispostaConversazione([_messaggio_conferma_lavoratore(lavoratore)])
+            return RispostaConversazione([_messaggio_conferma_lavoratore(db, lavoratore)])
 
         if testo_norm in COMANDI_RIEPILOGO:
             return RispostaConversazione([_riepilogo(db, azienda)])
@@ -214,10 +243,11 @@ def _gestisci_attesa_lavoratori(db: Session, sessione: SessioneConversazione, me
     # immagine o documento: estrazione anagrafica lavoratore
     contenuto, mime = scarica_media(messaggio.media_id)
     dati = estrai_documento_identita(contenuto, mime)
+    dati["_documento_foto_hash"] = hashlib.sha256(contenuto).hexdigest()
 
     if messaggio.caption:
         lavoratore = _crea_lavoratore(db, azienda, dati, messaggio.caption)
-        return RispostaConversazione([_messaggio_conferma_lavoratore(lavoratore)])
+        return RispostaConversazione([_messaggio_conferma_lavoratore(db, lavoratore)])
 
     sessione.lavoratore_dato_pendente = json.dumps(dati, ensure_ascii=False)
     nome = dati.get("nome") or ""

@@ -115,6 +115,52 @@ def test_riepilogo_e_esporta(db_session, monkeypatch):
     assert b"Mario" in contenuto
 
 
+def test_foto_documento_riusata_segnala_avviso(db_session, monkeypatch):
+    contenuti = {"m1": b"foto-identica", "m2": b"foto-identica"}
+    monkeypatch.setattr(
+        "app.conversation.handler.scarica_media", lambda media_id: (contenuti[media_id], "image/jpeg")
+    )
+    risultati = iter([DATI_DOCUMENTO_FAKE, {**DATI_DOCUMENTO_FAKE, "nome": "Luigi", "cognome": "Verdi"}])
+    monkeypatch.setattr(
+        "app.conversation.handler.estrai_documento_identita", lambda contenuto, mime: next(risultati)
+    )
+
+    gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="ACME SRL"))
+    gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="continua"))
+
+    risposta_1 = gestisci_messaggio(
+        db_session, CHAT_ID, MessaggioInbound(tipo="immagine", media_id="m1", caption="Operaio edile")
+    )
+    risposta_2 = gestisci_messaggio(
+        db_session, CHAT_ID, MessaggioInbound(tipo="immagine", media_id="m2", caption="Cuoco")
+    )
+
+    assert "ATTENZIONE" not in risposta_1.messaggi[0]
+    assert "ATTENZIONE" in risposta_2.messaggi[0]
+    assert "Mario Rossi" in risposta_2.messaggi[0]
+
+
+def test_foto_documento_diverse_non_segnala_avviso(db_session, monkeypatch):
+    contenuti = {"m1": b"foto-di-mario", "m2": b"foto-di-luigi"}
+    monkeypatch.setattr(
+        "app.conversation.handler.scarica_media", lambda media_id: (contenuti[media_id], "image/jpeg")
+    )
+    risultati = iter([DATI_DOCUMENTO_FAKE, {**DATI_DOCUMENTO_FAKE, "nome": "Luigi", "cognome": "Verdi"}])
+    monkeypatch.setattr(
+        "app.conversation.handler.estrai_documento_identita", lambda contenuto, mime: next(risultati)
+    )
+
+    gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="ACME SRL"))
+    gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="continua"))
+
+    gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="immagine", media_id="m1", caption="Operaio edile"))
+    risposta_2 = gestisci_messaggio(
+        db_session, CHAT_ID, MessaggioInbound(tipo="immagine", media_id="m2", caption="Cuoco")
+    )
+
+    assert "ATTENZIONE" not in risposta_2.messaggi[0]
+
+
 def test_nuova_azienda_reset_sessione(db_session):
     gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="ACME SRL"))
     gestisci_messaggio(db_session, CHAT_ID, MessaggioInbound(tipo="testo", testo="continua"))
