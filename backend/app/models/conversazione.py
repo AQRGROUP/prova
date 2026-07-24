@@ -7,16 +7,16 @@ from app.database import Base
 
 
 class SessioneConversazione(Base):
-    """Stato della conversazione WhatsApp in corso con un commerciale.
+    """Stato della conversazione Telegram in corso con un commerciale.
 
-    Una sessione è identificata dal numero di telefono del commerciale e tiene
+    Una sessione è identificata dal chat_id Telegram del commerciale e tiene
     traccia a quale azienda sta caricando lavoratori in questo momento.
     """
 
     __tablename__ = "sessioni_conversazione"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    telefono: Mapped[str] = mapped_column(String(50), unique=True)
+    chat_id: Mapped[str] = mapped_column(String(50), unique=True)
     stato: Mapped[str] = mapped_column(String(30), default="attesa_azienda")
     azienda_id: Mapped[int | None] = mapped_column(ForeignKey("aziende.id"), nullable=True)
 

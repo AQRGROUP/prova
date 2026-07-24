@@ -1,7 +1,7 @@
 [project]
 name = "crm-corsi-backend"
 version = "0.1.0"
-description = "Backend CRM per commerciali: acquisizione dati lavoratori via WhatsApp, estrazione documenti, matching mansione-corsi ed export verso la piattaforma corsi"
+description = "Backend CRM per commerciali: acquisizione dati lavoratori via Telegram, estrazione documenti, matching mansione-corsi ed export verso la piattaforma corsi"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

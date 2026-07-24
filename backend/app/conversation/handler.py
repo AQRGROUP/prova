@@ -1,4 +1,4 @@
-"""State machine della conversazione WhatsApp con il commerciale.
+"""State machine della conversazione Telegram con il commerciale.
 
 Flusso:
   ATTESA_AZIENDA -> il commerciale scrive il nome azienda (cerca/crea) oppure
@@ -15,7 +15,6 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.conversation import states
 from app.conversation.states import ATTESA_AZIENDA, ATTESA_LAVORATORI
 from app.extraction.document_extractor import estrai_documento_identita, estrai_visura_camerale
@@ -24,7 +23,7 @@ from app.models.conversazione import SessioneConversazione
 from app.models.lavoratore import Lavoratore
 from app.services.corsi_matcher import corsi_per_mansione_elastico
 from app.services.export import genera_csv_importazione, genera_xlsx_allegato1
-from app.whatsapp.client import scarica_media
+from app.telegram.client import scarica_media
 
 COMANDI_NUOVA_AZIENDA = {"nuova azienda", "cambia azienda"}
 COMANDI_RIEPILOGO = {"fine", "riepilogo"}
@@ -60,10 +59,10 @@ def _parse_data_italiana(testo: str | None) -> date | None:
     return None
 
 
-def _get_or_create_sessione(db: Session, telefono: str) -> SessioneConversazione:
-    sessione = db.query(SessioneConversazione).filter_by(telefono=telefono).first()
+def _get_or_create_sessione(db: Session, chat_id: str) -> SessioneConversazione:
+    sessione = db.query(SessioneConversazione).filter_by(chat_id=chat_id).first()
     if sessione is None:
-        sessione = SessioneConversazione(telefono=telefono, stato=ATTESA_AZIENDA)
+        sessione = SessioneConversazione(chat_id=chat_id, stato=ATTESA_AZIENDA)
         db.add(sessione)
         db.flush()
     return sessione
@@ -226,8 +225,8 @@ def _gestisci_attesa_lavoratori(db: Session, sessione: SessioneConversazione, me
     return RispostaConversazione([f"Documento ricevuto per {nome} {cognome}. Qual è la sua mansione?"])
 
 
-def gestisci_messaggio(db: Session, telefono: str, messaggio: MessaggioInbound) -> RispostaConversazione:
-    sessione = _get_or_create_sessione(db, telefono)
+def gestisci_messaggio(db: Session, chat_id: str, messaggio: MessaggioInbound) -> RispostaConversazione:
+    sessione = _get_or_create_sessione(db, chat_id)
 
     if messaggio.tipo == "testo" and (messaggio.testo or "").strip().lower() in COMANDI_NUOVA_AZIENDA:
         risposta = _reset_a_nuova_azienda(sessione)

@@ -6,9 +6,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./crm.db"
 
-    whatsapp_verify_token: str = ""
-    whatsapp_access_token: str = ""
-    whatsapp_phone_number_id: str = ""
+    telegram_bot_token: str = ""
+    # Opzionale ma consigliato: Telegram lo rimanda nell'header
+    # X-Telegram-Bot-Api-Secret-Token di ogni chiamata al webhook, per
+    # verificare che la richiesta arrivi davvero da Telegram.
+    telegram_webhook_secret: str = ""
 
     anthropic_api_key: str = ""
 
